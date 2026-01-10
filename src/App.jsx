@@ -21,16 +21,13 @@ function App() {
     setError(null);
 
     try {
-      // 1️⃣ Fetch leagues (already trimmed server-side)
+      /* ---------- LEAGUES ---------- */
       const leaguesRes = await fetch("/api/leagues");
       if (!leaguesRes.ok) throw new Error("Failed to load leagues");
 
       const leagueItems = await leaguesRes.json();
-      if (!Array.isArray(leagueItems) || leagueItems.length === 0) {
-        throw new Error("No leagues found");
-      }
+      if (!Array.isArray(leagueItems)) throw new Error("Bad league data");
 
-      // Normalize league shape
       const validLeagues = leagueItems.map((l) => ({
         id: l.id,
         name: l.name,
@@ -40,12 +37,11 @@ function App() {
 
       setLeagues(validLeagues);
 
-      // 2️⃣ Fetch all scoreboards in parallel
-      const scoresEntries = await Promise.all(
+      /* ---------- SCOREBOARDS ---------- */
+      const scoresPairs = await Promise.all(
         validLeagues.map(async (league) => {
           try {
             const res = await fetch(`/api/scoreboard/${league.slug}`);
-            if (!res.ok) throw new Error();
             const events = await res.json();
             return [league.id, Array.isArray(events) ? events : []];
           } catch {
@@ -54,21 +50,24 @@ function App() {
         })
       );
 
-      const scoresData = Object.fromEntries(scoresEntries);
+      const scoresData = Object.fromEntries(scoresPairs);
       setScores(scoresData);
 
-      // 3️⃣ Fetch odds ONLY for live games (parallel)
-      const liveEvents = validLeagues.flatMap((league) =>
-        (scoresData[league.id] || [])
-          .filter((e) => e.status?.type?.state === "in")
-          .map((e) => ({ league, event: e }))
-      );
+      /* ---------- ODDS (LIVE ONLY) ---------- */
+      const liveEvents = [];
 
-      const oddsEntries = await Promise.all(
+      for (const league of validLeagues) {
+        for (const event of scoresData[league.id] || []) {
+          if (event?.status?.type?.state === "in") {
+            liveEvents.push({ league, event });
+          }
+        }
+      }
+
+      const oddsPairs = await Promise.all(
         liveEvents.map(async ({ league, event }) => {
           try {
             const res = await fetch(`/api/odds/${league.slug}/${event.id}`);
-            if (!res.ok) throw new Error();
             const data = await res.json();
             return data ? [event.id, data] : null;
           } catch {
@@ -77,281 +76,149 @@ function App() {
         })
       );
 
-      const oddsData = Object.fromEntries(oddsEntries.filter(Boolean));
-
-      setOdds(oddsData);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch data");
+      setOdds(Object.fromEntries(oddsPairs.filter(Boolean)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load data");
     } finally {
       setLoading(false);
     }
   };
 
-  function hasRecentGames(leagueEvents) {
-    if (!leagueEvents || leagueEvents.length === 0) return false;
-
-    const now = new Date();
-    const threeWeeksAgo = new Date();
-    threeWeeksAgo.setDate(threeWeeksAgo.getDate() - 21);
-    const threeWeeksFromNow = new Date();
-    threeWeeksFromNow.setDate(threeWeeksFromNow.getDate() + 21);
-
-    return leagueEvents.some((event) => {
-      const eventDate = new Date(event.date);
-      // Show if game is within 3 weeks in the past or 3 weeks in the future
-      return eventDate >= threeWeeksAgo && eventDate <= threeWeeksFromNow;
-    });
-  }
-
-  function isGameInTimeWindow(eventDate) {
-    const date = new Date(eventDate);
-    const now = new Date();
-    const threeWeeksAgo = new Date();
-    threeWeeksAgo.setDate(threeWeeksAgo.getDate() - 4);
-    const threeWeeksFromNow = new Date();
-    threeWeeksFromNow.setDate(threeWeeksFromNow.getDate() + 8);
-
-    return date >= threeWeeksAgo && date <= threeWeeksFromNow;
-  }
-
-  function toggleLeague(leagueId) {
-    setCollapsedLeagues((prev) => ({
-      ...prev,
-      [leagueId]: !prev[leagueId],
-    }));
-  }
-
   useEffect(() => {
     fetchLeaguesAndScores();
   }, []);
 
-  function formatDate(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
+  /* ---------- HELPERS ---------- */
 
-  function formatTime(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString("en-US", {
+  const isGameInTimeWindow = (dateStr) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    const start = new Date();
+    start.setDate(start.getDate() - 4);
+    const end = new Date();
+    end.setDate(end.getDate() + 8);
+    return d >= start && d <= end;
+  };
+
+  const formatDate = (date) =>
+    new Date(date).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+
+  const formatTime = (date) =>
+    new Date(date).toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
     });
-  }
 
-  function americanOddsToPercentage(americanOdds) {
-    if (!americanOdds) return null;
+  const americanOddsToPercentage = (odds) => {
+    if (!odds) return null;
+    const n = Number(odds);
+    if (Number.isNaN(n)) return null;
 
-    const odds = parseFloat(americanOdds);
-    let probability;
+    const p = n > 0 ? 100 / (n + 100) : Math.abs(n) / (Math.abs(n) + 100);
+    return `${(p * 100).toFixed(1)}%`;
+  };
 
-    if (odds > 0) {
-      // Positive odds (underdog)
-      probability = 100 / (odds + 100);
-    } else {
-      // Negative odds (favorite)
-      probability = Math.abs(odds) / (Math.abs(odds) + 100);
-    }
+  const toggleLeague = (id) => {
+    setCollapsedLeagues((p) => ({ ...p, [id]: !p[id] }));
+  };
 
-    return (probability * 100).toFixed(1) + "%";
-  }
+  /* ---------- STATES ---------- */
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-8 flex items-center justify-center">
-        <div className="text-center">
-          <RefreshCw className="w-12 h-12 text-green-600 animate-spin mx-auto mb-4" />
-          <p className="text-xl text-gray-700">Loading soccer scores...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <RefreshCw className="w-10 h-10 animate-spin text-green-600" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-8 flex items-center justify-center">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-          <p className="text-red-700">{error}</p>
-          <button
-            onClick={fetchLeaguesAndScores}
-            className="mt-4 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-          >
-            Try Again
-          </button>
-        </div>
+      <div className="min-h-screen flex items-center justify-center text-red-600">
+        {error}
       </div>
     );
   }
 
+  /* ---------- RENDER ---------- */
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-2">
-            <Trophy className="w-10 h-10 text-green-600" />
-            <h1 className="text-4xl font-bold text-gray-800">
-              Soccer Scoreboard
-            </h1>
-          </div>
-          <p className="text-gray-600">
-            Live scores from leagues around the world
-          </p>
-          <button
-            onClick={fetchLeaguesAndScores}
-            className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 mx-auto"
-          >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
+      <div className="max-w-7xl mx-auto space-y-8">
+        <div className="text-center">
+          <Trophy className="w-10 h-10 mx-auto text-green-600" />
+          <h1 className="text-4xl font-bold">Soccer Scoreboard</h1>
         </div>
 
-        <div className="space-y-8">
-          {leagues
-            .map((league) => {
-              const leagueEvents = scores[league.id] || [];
-              const filteredEvents = leagueEvents.filter((event) =>
-                isGameInTimeWindow(event.date)
-              );
+        {leagues.map((league) => {
+          const leagueEvents = (scores[league.id] || []).filter((e) =>
+            isGameInTimeWindow(e?.date)
+          );
 
-              // Hide league if no games are in the time window
-              if (filteredEvents.length === 0) {
-                return null;
-              }
+          if (!leagueEvents.length) return null;
 
-              // Check if league has any live games
-              const hasLiveGames = filteredEvents.some(
-                (event) => event.status.type.state === "in"
-              );
-
-              return {
-                league,
-                filteredEvents,
-                hasLiveGames,
-              };
-            })
-            .filter((item) => item !== null)
-            .sort((a, b) => {
-              // Prioritize leagues with live games
-              if (a.hasLiveGames && !b.hasLiveGames) return -1;
-              if (!a.hasLiveGames && b.hasLiveGames) return 1;
-              return 0;
-            })
-            .map(({ league, filteredEvents, hasLiveGames }) => (
+          return (
+            <div key={league.id} className="bg-white rounded shadow">
               <div
-                key={league.id}
-                className="bg-white rounded-lg shadow-lg overflow-hidden"
+                className="p-4 bg-green-600 text-white flex justify-between cursor-pointer"
+                onClick={() => toggleLeague(league.id)}
               >
-                <div
-                  className="bg-green-600 text-white px-6 py-4 cursor-pointer hover:bg-green-700 transition-colors flex items-center justify-between"
-                  onClick={() => toggleLeague(league.id)}
-                >
-                  <div>
-                    <h2 className="text-2xl font-bold">{league.name}</h2>
-                  </div>
-                  {collapsedLeagues[league.id] ? (
-                    <ChevronDown className="w-6 h-6" />
-                  ) : (
-                    <ChevronUp className="w-6 h-6" />
-                  )}
-                </div>
-
-                {!collapsedLeagues[league.id] && (
-                  <div className="p-6">
-                    {filteredEvents.length > 0 ? (
-                      <div className="space-y-4">
-                        {filteredEvents.map((event) => (
-                          <div
-                            key={event.id}
-                            className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
-                          >
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-2 text-sm text-gray-600">
-                                <Calendar className="w-4 h-4" />
-                                {formatDate(event.date)}
-                                <Clock className="w-4 h-4 ml-2" />
-                                {formatTime(event.date)}
-                              </div>
-                              <span
-                                className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                                  event.status.type.state === "post"
-                                    ? "bg-gray-200 text-gray-700"
-                                    : event.status.type.state === "in"
-                                    ? "bg-red-100 text-red-700"
-                                    : "bg-blue-100 text-blue-700"
-                                }`}
-                              >
-                                {event.status.type.shortDetail}
-                              </span>
-                            </div>
-
-                            <div className="space-y-2">
-                              {event.competitions[0].competitors.map(
-                                (team, idx) => {
-                                  const isHome = team.homeAway === "home";
-                                  const teamOdds = odds[event.id];
-                                  const oddsValue = teamOdds
-                                    ? isHome
-                                      ? teamOdds.home
-                                      : teamOdds.away
-                                    : null;
-                                  const oddsPercentage =
-                                    americanOddsToPercentage(oddsValue);
-
-                                  return (
-                                    <div
-                                      key={team.id}
-                                      className="flex items-center justify-between"
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        {team.team.logo && (
-                                          <img
-                                            src={team.team.logo}
-                                            alt={team.team.name}
-                                            className="w-8 h-8 object-contain"
-                                          />
-                                        )}
-                                        <span
-                                          className={`font-semibold ${
-                                            team.winner
-                                              ? "text-green-700"
-                                              : "text-gray-700"
-                                          }`}
-                                        >
-                                          {team.team.displayName}
-                                        </span>
-                                        {event.status.type.state === "in" &&
-                                          oddsPercentage && (
-                                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                                              {oddsPercentage}
-                                            </span>
-                                          )}
-                                      </div>
-                                      <span
-                                        className={`text-2xl font-bold ${
-                                          team.winner
-                                            ? "text-green-700"
-                                            : "text-gray-700"
-                                        }`}
-                                      >
-                                        {team.score}
-                                      </span>
-                                    </div>
-                                  );
-                                }
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 text-center py-8">
-                        No recent matches available
-                      </p>
-                    )}
-                  </div>
-                )}
+                <h2 className="text-xl font-bold">{league.name}</h2>
+                {collapsedLeagues[league.id] ? <ChevronDown /> : <ChevronUp />}
               </div>
-            ))}
-        </div>
+
+              {!collapsedLeagues[league.id] && (
+                <div className="p-4 space-y-4">
+                  {leagueEvents.map((event) => {
+                    const competition = event?.competitions?.[0];
+                    if (!competition) return null;
+
+                    return (
+                      <div key={event.id} className="border p-4 rounded">
+                        <div className="flex justify-between text-sm mb-2">
+                          <div className="flex gap-2">
+                            <Calendar className="w-4 h-4" />
+                            {formatDate(event.date)}
+                            <Clock className="w-4 h-4 ml-2" />
+                            {formatTime(event.date)}
+                          </div>
+                          <span>{event.status?.type?.shortDetail}</span>
+                        </div>
+
+                        {competition.competitors.map((team) => {
+                          const eventOdds = odds[event.id];
+                          const oddsValue =
+                            team.homeAway === "home"
+                              ? eventOdds?.home
+                              : eventOdds?.away;
+
+                          const pct =
+                            event.status?.type?.state === "in"
+                              ? americanOddsToPercentage(oddsValue)
+                              : null;
+
+                          return (
+                            <div
+                              key={team.id}
+                              className="flex justify-between items-center"
+                            >
+                              <span>{team.team.displayName}</span>
+                              <span className="font-bold">{team.score}</span>
+                              {pct && <span className="text-xs">{pct}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
