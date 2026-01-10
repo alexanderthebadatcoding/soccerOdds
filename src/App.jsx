@@ -23,7 +23,7 @@ function App() {
     try {
       // Fetch the list of leagues
       const leaguesResponse = await fetch(
-        "http://sports.core.api.espn.com/v2/sports/soccer/leagues?lang=en&region=us"
+        "https://sports.core.api.espn.com/v2/sports/soccer/leagues?lang=en&region=us"
       );
       const leaguesData = await leaguesResponse.json();
 
@@ -77,7 +77,7 @@ function App() {
       for (const league of validLeagues) {
         try {
           const scoresRes = await fetch(
-            `http://site.api.espn.com/apis/site/v2/sports/soccer/${league.slug}/scoreboard`
+            `https://site.api.espn.com/apis/site/v2/sports/soccer/${league.slug}/scoreboard`
           );
           const data = await scoresRes.json();
           scoresData[league.id] = data.events || [];
@@ -97,7 +97,7 @@ function App() {
           // Only fetch odds for live games
           if (event.status.type.state === "in") {
             try {
-              const oddsUrl = `http://sports.core.api.espn.com/v2/sports/soccer/leagues/${league.slug}/events/${event.id}/competitions/${event.id}/odds`;
+              const oddsUrl = `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${league.slug}/events/${event.id}/competitions/${event.id}/odds`;
               const oddsRes = await fetch(oddsUrl);
               const oddsResult = await oddsRes.json();
 
