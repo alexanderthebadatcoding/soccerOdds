@@ -205,13 +205,11 @@ function App() {
                         src={league.logo}
                         alt={league.name}
                         className="w-10 h-10 object-contain rounded-full"
+                        loading="lazy"
                       />
                     )}
                     <div>
                       <h2 className="text-2xl font-bold">{league.name}</h2>
-                      <p className="text-green-100 text-sm">
-                        {league.abbreviation}
-                      </p>
                     </div>
                   </div>
                   {collapsedLeagues[league.id] ? (
@@ -273,6 +271,7 @@ function App() {
                                           src={team.team.logo}
                                           alt={team.team.name}
                                           className="w-8 h-8 object-contain"
+                                          loading="lazy"
                                         />
                                       )}
                                       <span
