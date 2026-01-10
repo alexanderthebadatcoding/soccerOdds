@@ -147,78 +147,176 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
-        <div className="text-center">
-          <Trophy className="w-10 h-10 mx-auto text-green-600" />
-          <h1 className="text-4xl font-bold">Soccer Scoreboard</h1>
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <Trophy className="w-10 h-10 text-green-600" />
+            <h1 className="text-4xl font-bold text-gray-800">
+              Soccer Scoreboard
+            </h1>
+          </div>
+          <p className="text-gray-600">
+            Live scores from leagues around the world
+          </p>
+          <button
+            onClick={fetchLeaguesAndScores}
+            className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 mx-auto"
+          >
+            <RefreshCw className="w-4 h-4" /> Refresh
+          </button>
         </div>
 
-        {leagues.map((league) => {
-          const leagueEvents = (scores[league.id] || []).filter((e) =>
-            isGameInTimeWindow(e?.date)
-          );
+        <div className="space-y-8">
+          {leagues
+            .map((league) => {
+              const leagueEvents = scores[league.id] || [];
+              const filteredEvents = leagueEvents.filter((e) =>
+                isGameInTimeWindow(e.date)
+              );
 
-          if (!leagueEvents.length) return null;
+              if (filteredEvents.length === 0) return null;
 
-          return (
-            <div key={league.id} className="bg-white rounded shadow">
+              const hasLiveGames = filteredEvents.some(
+                (e) => e.status.type.state === "in"
+              );
+
+              return { league, filteredEvents, hasLiveGames };
+            })
+            .filter(Boolean)
+            .sort((a, b) =>
+              a.hasLiveGames && !b.hasLiveGames
+                ? -1
+                : !a.hasLiveGames && b.hasLiveGames
+                ? 1
+                : 0
+            )
+            .map(({ league, filteredEvents }) => (
               <div
-                className="p-4 bg-green-600 text-white flex justify-between cursor-pointer"
-                onClick={() => toggleLeague(league.id)}
+                key={league.id}
+                className="bg-white rounded-lg shadow-lg overflow-hidden"
               >
-                <h2 className="text-xl font-bold">{league.name}</h2>
-                {collapsedLeagues[league.id] ? <ChevronDown /> : <ChevronUp />}
-              </div>
-
-              {!collapsedLeagues[league.id] && (
-                <div className="p-4 space-y-4">
-                  {leagueEvents.map((event) => {
-                    const competition = event?.competitions?.[0];
-                    if (!competition) return null;
-
-                    return (
-                      <div key={event.id} className="border p-4 rounded">
-                        <div className="flex justify-between text-sm mb-2">
-                          <div className="flex gap-2">
-                            <Calendar className="w-4 h-4" />
-                            {formatDate(event.date)}
-                            <Clock className="w-4 h-4 ml-2" />
-                            {formatTime(event.date)}
-                          </div>
-                          <span>{event.status?.type?.shortDetail}</span>
-                        </div>
-
-                        {competition.competitors.map((team) => {
-                          const eventOdds = odds[event.id];
-                          const oddsValue =
-                            team.homeAway === "home"
-                              ? eventOdds?.home
-                              : eventOdds?.away;
-
-                          const pct =
-                            event.status?.type?.state === "in"
-                              ? americanOddsToPercentage(oddsValue)
-                              : null;
-
-                          return (
-                            <div
-                              key={team.id}
-                              className="flex justify-between items-center"
-                            >
-                              <span>{team.team.displayName}</span>
-                              <span className="font-bold">{team.score}</span>
-                              {pct && <span className="text-xs">{pct}</span>}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
+                <div
+                  className="bg-green-600 text-white px-6 py-4 cursor-pointer hover:bg-green-700 transition-colors flex items-center justify-between"
+                  onClick={() => toggleLeague(league.id)}
+                >
+                  <div className="flex items-center gap-3">
+                    {league.logo && (
+                      <img
+                        src={league.logo}
+                        alt={league.name}
+                        className="w-10 h-10 object-contain rounded-full"
+                      />
+                    )}
+                    <div>
+                      <h2 className="text-2xl font-bold">{league.name}</h2>
+                      <p className="text-green-100 text-sm">
+                        {league.abbreviation}
+                      </p>
+                    </div>
+                  </div>
+                  {collapsedLeagues[league.id] ? (
+                    <ChevronDown className="w-6 h-6" />
+                  ) : (
+                    <ChevronUp className="w-6 h-6" />
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
+
+                {!collapsedLeagues[league.id] && (
+                  <div className="p-6">
+                    {filteredEvents.length > 0 ? (
+                      <div className="space-y-4">
+                        {filteredEvents.map((event) => (
+                          <div
+                            key={event.id}
+                            className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2 text-sm text-gray-600">
+                                <Calendar className="w-4 h-4" />
+                                {formatDate(event.date)}
+                                <Clock className="w-4 h-4 ml-2" />
+                                {formatTime(event.date)}
+                              </div>
+                              <span
+                                className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                                  event.status.type.state === "post"
+                                    ? "bg-gray-200 text-gray-700"
+                                    : event.status.type.state === "in"
+                                    ? "bg-red-100 text-red-700"
+                                    : "bg-blue-100 text-blue-700"
+                                }`}
+                              >
+                                {event.status.type.shortDetail}
+                              </span>
+                            </div>
+
+                            <div className="space-y-2">
+                              {event.competitions[0].competitors.map((team) => {
+                                const isHome = team.homeAway === "home";
+                                const teamOdds = odds[event.id];
+                                const oddsValue = teamOdds
+                                  ? isHome
+                                    ? teamOdds.home
+                                    : teamOdds.away
+                                  : null;
+                                const oddsPercentage =
+                                  americanOddsToPercentage(oddsValue);
+
+                                return (
+                                  <div
+                                    key={team.id}
+                                    className="flex items-center justify-between"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      {team.team.logo && (
+                                        <img
+                                          src={team.team.logo}
+                                          alt={team.team.name}
+                                          className="w-8 h-8 object-contain"
+                                        />
+                                      )}
+                                      <span
+                                        className={`font-semibold ${
+                                          team.winner
+                                            ? "text-green-700"
+                                            : "text-gray-700"
+                                        }`}
+                                      >
+                                        {team.team.displayName}
+                                      </span>
+                                      {event.status.type.state === "in" &&
+                                        oddsPercentage && (
+                                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                            {oddsPercentage}
+                                          </span>
+                                        )}
+                                    </div>
+                                    <span
+                                      className={`text-2xl font-bold ${
+                                        team.winner
+                                          ? "text-green-700"
+                                          : "text-gray-700"
+                                      }`}
+                                    >
+                                      {team.score}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-center py-8">
+                        No recent matches available
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+        </div>
       </div>
     </div>
   );
