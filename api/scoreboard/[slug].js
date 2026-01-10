@@ -7,7 +7,7 @@ export default async function handler(req, res) {
     );
     const data = await r.json();
 
-    res.status(200).json(data.events ?? []);
+    res.status(200).json(data.events || []);
   } catch {
     res.status(200).json([]);
   }

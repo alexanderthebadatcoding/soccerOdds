@@ -5,7 +5,7 @@ export default async function handler(req, res) {
     );
     const data = await r.json();
 
-    res.status(200).json(data.items?.slice(0, 26) ?? []);
+    res.status(200).json(data.items?.slice(0, 26) || []);
   } catch {
     res.status(500).json([]);
   }

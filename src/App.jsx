@@ -142,7 +142,7 @@ function App() {
       </div>
     );
   }
-
+  console.log("Leagues:", leagues);
   /* ---------- RENDER ---------- */
 
   return (
