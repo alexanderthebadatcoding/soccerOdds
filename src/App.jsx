@@ -281,12 +281,7 @@ function App() {
                                             : "text-gray-700"
                                         }`}
                                       >
-                                        <span className="sm:hidden">
-                                          {team.team.abbreviation}
-                                        </span>
-                                        <span className="hidden sm:block">
-                                          {team.team.displayName}
-                                        </span>
+                                        {team.team.nickname}
                                       </span>
                                       {oddsPercentage && (
                                         <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
