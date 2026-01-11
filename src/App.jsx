@@ -283,12 +283,11 @@ function App() {
                                       >
                                         {team.team.displayName}
                                       </span>
-                                      {event.status.type.state === "in" &&
-                                        oddsPercentage && (
-                                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                                            {oddsPercentage}
-                                          </span>
-                                        )}
+                                      {oddsPercentage && (
+                                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                          {oddsPercentage}
+                                        </span>
+                                      )}
                                     </div>
                                     <span
                                       className={`text-2xl font-bold ${
