@@ -284,7 +284,7 @@ function App() {
                                         <span className="sm:hidden">
                                           {team.team.abbreviation}
                                         </span>
-                                        <span className="hidden sm:inline">
+                                        <span className="hidden sm:block">
                                           {team.team.displayName}
                                         </span>
                                       </span>
