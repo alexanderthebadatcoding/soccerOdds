@@ -281,13 +281,19 @@ function App() {
                                             : "text-gray-700"
                                         }`}
                                       >
-                                        {team.team.name}
-                                      </span>
-                                      {oddsPercentage && (
-                                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                                          {oddsPercentage}
+                                        <span className="sm:hidden">
+                                          {team.team.abbreviation}
                                         </span>
-                                      )}
+                                        <span className="hidden sm:inline">
+                                          {team.team.name}
+                                        </span>
+                                      </span>
+                                      {oddsPercentage &&
+                                        event.status.type.state !== "post" && (
+                                          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                                            {oddsPercentage}
+                                          </span>
+                                        )}
                                     </div>
                                     <span
                                       className={`text-2xl font-bold ${
